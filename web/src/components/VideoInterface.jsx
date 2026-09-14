@@ -1,6 +1,6 @@
 // web/src/components/VideoInterface.jsx
 import React, { useRef, useState, useEffect } from 'react';
-import { Video, VideoOff, Camera, HeartPulse, Eye, Smile, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Video, VideoOff, Camera, HeartPulse, ShieldCheck } from 'lucide-react';
 import { apiClient } from '../services/api';
 
 export default function VideoInterface({ isCamOn, onToggleCam, onMoodLogged, userId = 'user_demo_01' }) {
@@ -181,7 +181,7 @@ export default function VideoInterface({ isCamOn, onToggleCam, onMoodLogged, use
                 color: 'var(--sage-green)',
               }}>
                 <ShieldCheck size={13} />
-                Private On-Device Feed
+                {isScanning ? 'Live private scan' : 'Private On-Device Feed'}
               </div>
             </div>
           </>
@@ -218,6 +218,7 @@ export default function VideoInterface({ isCamOn, onToggleCam, onMoodLogged, use
 
       {/* Real-time Facial Bio-Metrics Grid */}
       {isCamOn && (
+        <>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -264,6 +265,13 @@ export default function VideoInterface({ isCamOn, onToggleCam, onMoodLogged, use
             </div>
           </div>
         </div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+          <button onClick={handleCaptureSnapshot} className="btn-primary" type="button">
+            <Camera size={16} />
+            Capture Wellness Snapshot
+          </button>
+        </div>
+        </>
       )}
     </div>
   );

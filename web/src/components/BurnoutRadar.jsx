@@ -1,19 +1,19 @@
 // web/src/components/BurnoutRadar.jsx
 import React from 'react';
-import { X, ShieldAlert, Sparkles, HeartPulse, CheckCircle2, TrendingDown, Moon, Coffee, Wind } from 'lucide-react';
+import { X, HeartPulse, CheckCircle2, Moon, Coffee, Wind } from 'lucide-react';
 
-export default function BurnoutRadar({ isOpen, onClose, burnoutScore = 24, moodHistory = [] }) {
+export default function BurnoutRadar({
+  isOpen,
+  onClose,
+  burnoutScore = 24,
+  moodHistory = [],
+  burnoutSnapshot = { level: 'Low', status: 'Healthy equilibrium', trend: 'steady' },
+}) {
   if (!isOpen) return null;
 
-  const weeklyTrends = [
-    { day: 'Mon', stress: 30, calm: 70 },
-    { day: 'Tue', stress: 45, calm: 55 },
-    { day: 'Wed', stress: 60, calm: 40 },
-    { day: 'Thu', stress: 35, calm: 65 },
-    { day: 'Fri', stress: 25, calm: 75 },
-    { day: 'Sat', stress: 15, calm: 85 },
-    { day: 'Sun', stress: 20, calm: 80 },
-  ];
+  const weeklyTrends = buildWeeklyTrends(moodHistory);
+  const statusColor = burnoutScore >= 70 ? '#F87171' : burnoutScore >= 45 ? 'var(--pastel-peach)' : 'var(--sage-green)';
+  const recentEntries = moodHistory.slice(0, 5);
 
   return (
     <div style={{
@@ -82,15 +82,15 @@ export default function BurnoutRadar({ isOpen, onClose, burnoutScore = 24, moodH
               Current Burnout Score
             </span>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginTop: '4px' }}>
-              <span style={{ fontFamily: 'var(--font-heading)', fontSize: '2.8rem', fontWeight: '700', color: 'var(--sage-green)' }}>
+              <span style={{ fontFamily: 'var(--font-heading)', fontSize: '2.8rem', fontWeight: '700', color: statusColor }}>
                 {burnoutScore}%
               </span>
               <span style={{ fontSize: '0.95rem', fontWeight: '600', color: 'var(--sage-green-light)' }}>
-                Low Risk (Safe Equilibrium)
+                {burnoutSnapshot.level} Risk ({burnoutSnapshot.status})
               </span>
             </div>
             <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginTop: '4px', maxWidth: '420px' }}>
-              Based on your vocal cadence, text reflections, and facial bio-telemetry over the past 7 days.
+              Based on {moodHistory.length || 'live'} multimodal check-ins stored through the new Django API layer.
             </p>
           </div>
 
@@ -98,13 +98,13 @@ export default function BurnoutRadar({ isOpen, onClose, burnoutScore = 24, moodH
             width: '90px',
             height: '90px',
             borderRadius: '50%',
-            border: '4px solid var(--sage-green)',
+            border: `4px solid ${statusColor}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 25px rgba(168, 198, 165, 0.35)',
+            boxShadow: `0 0 25px ${statusColor}40`,
           }}>
-            <CheckCircle2 size={38} color="var(--sage-green)" />
+            <CheckCircle2 size={38} color={statusColor} />
           </div>
         </div>
 
@@ -122,7 +122,6 @@ export default function BurnoutRadar({ isOpen, onClose, burnoutScore = 24, moodH
             </div>
           </div>
 
-          {/* Bar chart visualization */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', height: '140px', gap: '12px', paddingTop: '10px' }}>
             {weeklyTrends.map((t, idx) => (
               <div key={idx} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
@@ -146,7 +145,35 @@ export default function BurnoutRadar({ isOpen, onClose, burnoutScore = 24, moodH
           </div>
         </div>
 
-        {/* Restorative Action Recommendations */}
+        <div style={{ marginBottom: '24px' }}>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: '600', marginBottom: '12px' }}>
+            Recent Logged Signals
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+            {recentEntries.length ? (
+              recentEntries.map((entry) => (
+                <div key={entry.id} className="glass-card" style={{ padding: '14px' }}>
+                  <div className={`badge-emotion ${entry.emotion}`} style={{ width: 'fit-content', marginBottom: '10px' }}>
+                    {entry.emotion}
+                  </div>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    {entry.sourceMode} check-in
+                  </p>
+                  <p style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    {new Date(entry.timestamp).toLocaleString()}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <div className="glass-card" style={{ padding: '14px' }}>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                  No historical entries yet. Run a few text or voice check-ins to populate the radar.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div>
           <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1rem', fontWeight: '600', marginBottom: '12px' }}>
             Personalized Calming Actions
@@ -186,4 +213,41 @@ export default function BurnoutRadar({ isOpen, onClose, burnoutScore = 24, moodH
       </div>
     </div>
   );
+}
+
+function buildWeeklyTrends(moodHistory) {
+  const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const scoreMap = {
+    calm: 0.1,
+    happy: 0.18,
+    neutral: 0.42,
+    sad: 0.58,
+    anxious: 0.78,
+    stressed: 0.9,
+  };
+  const today = new Date();
+
+  return Array.from({ length: 7 }).map((_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (6 - index));
+
+    const sameDayEntries = moodHistory.filter((entry) => {
+      const entryDate = new Date(entry.timestamp);
+      return entryDate.toDateString() === date.toDateString();
+    });
+
+    if (!sameDayEntries.length) {
+      return { day: dayMap[date.getDay()], stress: 18, calm: 82 };
+    }
+
+    const average =
+      sameDayEntries.reduce((total, entry) => total + (scoreMap[entry.emotion] ?? 0.42), 0) /
+      sameDayEntries.length;
+
+    return {
+      day: dayMap[date.getDay()],
+      stress: Math.round(average * 100),
+      calm: Math.round((1 - average) * 100),
+    };
+  });
 }

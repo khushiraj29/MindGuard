@@ -1,6 +1,6 @@
 // web/src/components/VoiceAssistantOrb.jsx
 import React, { useState, useEffect } from 'react';
-import { Mic, MicOff, Sparkles, Volume2, Radio, HeartPulse, RefreshCw } from 'lucide-react';
+import { Mic, MicOff, Sparkles, Radio, HeartPulse } from 'lucide-react';
 import { speechService } from '../services/speech';
 import { apiClient } from '../services/api';
 

@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.venv/
 
 # Environment files
 .env
@@ -26,3 +27,9 @@ npm-debug.log*
 # Coverage
 coverage/
 *.metadata.json
+
+# Python / Django
+__pycache__/
+*.py[cod]
+django_backend/db.sqlite3
+django_backend/staticfiles/

@@ -1,69 +1,115 @@
 // web/src/services/api.js
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? 'http://127.0.0.1:8000/api' : '/api');
+
+async function requestJson(path, options = {}, fallback) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      ...options,
+      signal: controller.signal,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.message || `Request failed with ${response.status}`);
+    }
+    return data;
+  } catch (error) {
+    if (fallback) {
+      return fallback(error);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 export const apiClient = {
-  // Multimodal Interaction APIs
   async sendTextInteraction(userId, text) {
-    try {
-      const res = await fetch(`${API_BASE}/interactions/text`, {
+    const data = await requestJson(
+      '/interactions/text',
+      {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, text }),
-      });
-      return await res.json();
-    } catch (err) {
-      console.warn('API error sending text interaction, falling back to local reasoning:', err);
-      return mockAnalysis('text', text);
-    }
+      },
+      (error) => {
+        console.warn('API error sending text interaction, falling back to local reasoning:', error);
+        return mockAnalysis('text', text);
+      }
+    );
+
+    return { ...data, moodLog: normalizeMoodLog(data.moodLog) };
   },
 
   async sendVoiceInteraction(userId, audioBase64) {
-    try {
-      const res = await fetch(`${API_BASE}/interactions/voice`, {
+    const data = await requestJson(
+      '/interactions/voice',
+      {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, audioBase64 }),
-      });
-      return await res.json();
-    } catch (err) {
-      console.warn('API error sending voice interaction:', err);
-      return mockAnalysis('voice');
-    }
+      },
+      (error) => {
+        console.warn('API error sending voice interaction:', error);
+        return mockAnalysis('voice');
+      }
+    );
+
+    return { ...data, moodLog: normalizeMoodLog(data.moodLog) };
   },
 
   async sendVideoInteraction(userId, videoBase64) {
-    try {
-      const res = await fetch(`${API_BASE}/interactions/video`, {
+    const data = await requestJson(
+      '/interactions/video',
+      {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, videoBase64 }),
-      });
-      return await res.json();
-    } catch (err) {
-      console.warn('API error sending video interaction:', err);
-      return mockAnalysis('video');
-    }
+      },
+      (error) => {
+        console.warn('API error sending video interaction:', error);
+        return mockAnalysis('video');
+      }
+    );
+
+    return { ...data, moodLog: normalizeMoodLog(data.moodLog) };
   },
 
-  // Burnout & Mood Logs
   async getBurnoutRisk(userId) {
-    try {
-      const res = await fetch(`${API_BASE}/mood/burnout-risk?userId=${userId}`);
-      return await res.json();
-    } catch (err) {
-      return { burnoutRisk: 28, level: 'Low', status: 'Healthy equilibrium' };
-    }
+    return requestJson(
+      `/mood/burnout-risk?userId=${encodeURIComponent(userId)}`,
+      {},
+      () => ({ burnoutRisk: 28, level: 'Low', status: 'Healthy equilibrium', trend: 'steady' })
+    );
   },
 
   async getMoodHistory(userId) {
-    try {
-      const res = await fetch(`${API_BASE}/mood/history?userId=${userId}`);
-      return await res.json();
-    } catch (err) {
-      return [];
-    }
+    const data = await requestJson(
+      `/mood/history?userId=${encodeURIComponent(userId)}`,
+      {},
+      () => []
+    );
+    return Array.isArray(data) ? data.map(normalizeMoodLog) : [];
   },
 };
+
+function normalizeMoodLog(moodLog) {
+  if (!moodLog) {
+    return null;
+  }
+
+  return {
+    id: moodLog.id || moodLog._id || `mood_${Date.now()}`,
+    userId: moodLog.userId || moodLog.client_user_id || 'user_demo_01',
+    emotion: moodLog.emotion || 'neutral',
+    sourceMode: moodLog.sourceMode || moodLog.source_mode || 'text',
+    timestamp: moodLog.timestamp || new Date().toISOString(),
+    details: moodLog.details || {},
+  };
+}
 
 function mockAnalysis(mode, text = '') {
   let emotion = 'calm';
@@ -78,12 +124,12 @@ function mockAnalysis(mode, text = '') {
 
   return {
     message: 'Interaction processed',
-    moodLog: {
-      _id: 'mock_' + Date.now(),
+    moodLog: normalizeMoodLog({
+      id: 'mock_' + Date.now(),
       emotion,
       sourceMode: mode,
       timestamp: new Date().toISOString(),
       details: { confidence: 0.92 },
-    },
+    }),
   };
 }
