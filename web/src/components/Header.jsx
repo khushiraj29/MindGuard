@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { ambianceEngine } from '../services/audioAmbiance';
 
-export default function Header({ onOpenDashboard, burnoutScore = 24, autoInterventionActive = false }) {
+export default function Header({ onOpenDashboard, burnoutScore = 24, autoInterventionActive: _autoInterventionActive = false }) {
   const [activeTrack, setActiveTrack] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -57,6 +57,8 @@ export default function Header({ onOpenDashboard, burnoutScore = 24, autoInterve
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      gap: '12px',
       padding: '14px 28px',
       borderBottom: '1px solid var(--border-glass)',
       background: 'rgba(7, 11, 20, 0.8)',
@@ -134,7 +136,7 @@ export default function Header({ onOpenDashboard, burnoutScore = 24, autoInterve
       </div>
 
       {/* Action Controls & Soundscape Selector */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', position: 'relative', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
         {/* Soundscape Dropdown Button */}
         <button
           onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -160,7 +162,7 @@ export default function Header({ onOpenDashboard, burnoutScore = 24, autoInterve
           <div className="glass-panel" style={{
             position: 'absolute',
             top: '48px',
-            right: '130px',
+            right: '0',
             width: '260px',
             background: 'rgba(14, 22, 38, 0.95)',
             padding: '8px',

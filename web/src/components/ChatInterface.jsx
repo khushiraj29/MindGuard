@@ -1,6 +1,6 @@
 // web/src/components/ChatInterface.jsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, User, Bot, HeartPulse, RefreshCw } from 'lucide-react';
+import { Send, Sparkles, User, Bot, HeartPulse } from 'lucide-react';
 import { apiClient } from '../services/api';
 
 export default function ChatInterface({ userId = 'user_demo_01', onMoodLogged }) {

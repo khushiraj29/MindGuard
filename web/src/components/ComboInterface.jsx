@@ -10,8 +10,6 @@ import {
   Radio,
   Sparkles,
   Smile,
-  Volume2,
-  Moon,
   Wind,
 } from 'lucide-react';
 import { speechService } from '../services/speech';
@@ -25,7 +23,7 @@ export default function ComboInterface({
   onToggleMic,
   isCamOn,
   onToggleCam,
-  showTranscript,
+  showTranscript: _showTranscript,
   onMoodLogged,
   onOpenMeditation,
   userId = 'user_demo_01',

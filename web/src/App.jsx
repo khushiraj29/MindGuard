@@ -1,5 +1,5 @@
-// web/src/App.jsx
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import './App.css';
 import Header from './components/Header';
 import ModeSwitcher from './components/ModeSwitcher';
 import VoiceAssistantOrb from './components/VoiceAssistantOrb';
@@ -8,98 +8,153 @@ import VideoInterface from './components/VideoInterface';
 import ComboInterface from './components/ComboInterface';
 import BurnoutRadar from './components/BurnoutRadar';
 import SadhguruMeditationModal from './components/SadhguruMeditationModal';
+import InsightsPanel from './components/InsightsPanel';
 import { ambianceEngine } from './services/audioAmbiance';
-import { Sparkles, Music, X } from 'lucide-react';
+import { ArrowUpRight, Music, Sparkles, X } from 'lucide-react';
+import { apiClient } from './services/api';
+
+const DEMO_USER_ID = 'user_demo_01';
+const EMPTY_SNAPSHOT = {
+  burnoutRisk: 28,
+  level: 'Low',
+  status: 'Healthy equilibrium',
+  trend: 'steady',
+  latestEmotion: 'neutral',
+  dominantEmotion: 'neutral',
+};
 
 export default function App() {
-  // Primary active mode: 'combo' (Unified all-in-one), 'voice', 'text', 'video'
   const [currentMode, setCurrentMode] = useState('combo');
-
-  // Hardware & Feature stream states
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCamOn, setIsCamOn] = useState(true);
   const [showTranscript, setShowTranscript] = useState(true);
-
-  // Health and Burnout state
-  const [burnoutScore, setBurnoutScore] = useState(28);
   const [moodHistory, setMoodHistory] = useState([]);
+  const [burnoutSnapshot, setBurnoutSnapshot] = useState(EMPTY_SNAPSHOT);
+  const [isSyncingInsights, setIsSyncingInsights] = useState(true);
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
   const [isMeditationOpen, setIsMeditationOpen] = useState(false);
   const [interventionToast, setInterventionToast] = useState(null);
 
-  const handleToggleMic = () => {
-    setIsMicOn((prev) => !prev);
-  };
+  const burnoutScore = burnoutSnapshot.burnoutRisk;
 
-  const handleToggleCam = () => {
-    setIsCamOn((prev) => !prev);
-  };
+  useEffect(() => {
+    void refreshInsights();
+  }, []);
 
-  const handleToggleTranscript = () => {
-    setShowTranscript((prev) => !prev);
-  };
+  const handleToggleMic = () => setIsMicOn((prev) => !prev);
+  const handleToggleCam = () => setIsCamOn((prev) => !prev);
+  const handleToggleTranscript = () => setShowTranscript((prev) => !prev);
+
+  async function refreshInsights() {
+    setIsSyncingInsights(true);
+    try {
+      const [history, snapshot] = await Promise.all([
+        apiClient.getMoodHistory(DEMO_USER_ID),
+        apiClient.getBurnoutRisk(DEMO_USER_ID),
+      ]);
+      setMoodHistory(history);
+      setBurnoutSnapshot((prev) => ({ ...prev, ...snapshot }));
+    } finally {
+      setIsSyncingInsights(false);
+    }
+  }
 
   const handleMoodLogged = (logEntry) => {
     if (!logEntry) return;
-    setMoodHistory((prev) => [logEntry, ...prev]);
 
-    // Recalculate burnout dynamically
-    if (logEntry.emotion === 'stressed') {
-      setBurnoutScore((prev) => {
-        const nextScore = Math.min(100, prev + 8);
-        // If stress is detected, automatically play calming music intervention!
-        ambianceEngine.triggerBurnoutIntervention();
-        setInterventionToast('MindGuard detected elevated stress. Auto-playing gentle restorative soundscape to ease your mind...');
-        setTimeout(() => setInterventionToast(null), 7000);
-        return nextScore;
-      });
-    } else if (logEntry.emotion === 'happy' || logEntry.emotion === 'calm') {
-      setBurnoutScore((prev) => Math.max(10, prev - 4));
+    const normalizedEntry = normalizeMoodLog(logEntry);
+    setMoodHistory((prev) => {
+      const nextHistory = [normalizedEntry, ...prev].slice(0, 30);
+      setBurnoutSnapshot(buildSnapshot(nextHistory));
+      return nextHistory;
+    });
+
+    if (normalizedEntry.emotion === 'stressed' || normalizedEntry.emotion === 'anxious') {
+      ambianceEngine.triggerBurnoutIntervention();
+      setInterventionToast('MindGuard detected elevated stress. Auto-playing a gentle restorative soundscape to ease the transition.');
+      setTimeout(() => setInterventionToast(null), 7000);
     }
+
+    if (normalizedEntry.emotion === 'happy' || normalizedEntry.emotion === 'calm') {
+      setInterventionToast('A positive signal was logged. This is a good moment to preserve the routine that helped you feel steadier.');
+      setTimeout(() => setInterventionToast(null), 5000);
+    }
+
+    void refreshInsights();
   };
 
+  const recoveryActions = useMemo(
+    () => getRecoveryActions(burnoutSnapshot, moodHistory[0]),
+    [burnoutSnapshot, moodHistory]
+  );
+
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Top Calming Navigation */}
+    <div className="app-shell">
       <Header
         burnoutScore={burnoutScore}
         onOpenDashboard={() => setIsDashboardOpen(true)}
       />
 
-      {/* Auto-Burnout Intervention Toast */}
       {interventionToast && (
-        <div style={{
-          position: 'fixed',
-          top: '78px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 100,
-          background: 'linear-gradient(135deg, rgba(14, 22, 38, 0.95) 0%, rgba(22, 33, 54, 0.95) 100%)',
-          border: '1px solid var(--sage-green)',
-          padding: '12px 24px',
-          borderRadius: '999px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(168, 198, 165, 0.3)',
-          animation: 'orbBreathe 4s infinite',
-        }}>
+        <div className="intervention-toast">
           <Music size={18} color="var(--sage-green)" />
-          <span style={{ fontSize: '0.86rem', color: 'var(--sage-green-light)', fontWeight: '500' }}>
-            {interventionToast}
-          </span>
+          <span>{interventionToast}</span>
           <button
             onClick={() => setInterventionToast(null)}
-            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+            className="toast-dismiss"
           >
             <X size={14} />
           </button>
         </div>
       )}
 
-      {/* Main Interaction Area */}
-      <main style={{ flex: 1, padding: '10px 16px 30px 16px', display: 'flex', flexDirection: 'column' }}>
-        {/* Mode Switcher Bar */}
+      <main className="app-content">
+        <section className="hero-grid">
+          <div className="hero-panel glass-panel">
+            <span className="eyebrow">Django + React foundation</span>
+            <h2>MindGuard is shifting from a prototype backend to a steadier wellness platform.</h2>
+            <p>
+              The web app now has a dedicated Django API path for mood logs, burnout risk, auth, and
+              interaction tracking. That gives the experience a cleaner base for future AI, mobile, and
+              notification upgrades.
+            </p>
+
+            <div className="hero-actions">
+              <button className="btn-primary" type="button" onClick={() => setCurrentMode('combo')}>
+                <Sparkles size={16} />
+                Launch multimodal session
+              </button>
+              <button className="btn-ghost" type="button" onClick={() => setIsDashboardOpen(true)}>
+                <ArrowUpRight size={14} />
+                Review burnout radar
+              </button>
+            </div>
+
+            <div className="hero-meta-grid">
+              <div className="hero-meta-card">
+                <span>Current mode</span>
+                <strong>{formatLabel(currentMode)}</strong>
+              </div>
+              <div className="hero-meta-card">
+                <span>Backend status</span>
+                <strong>Django API ready</strong>
+              </div>
+              <div className="hero-meta-card">
+                <span>Latest pattern</span>
+                <strong>{formatLabel(burnoutSnapshot.dominantEmotion)}</strong>
+              </div>
+            </div>
+          </div>
+
+          <InsightsPanel
+            burnoutSnapshot={burnoutSnapshot}
+            moodHistory={moodHistory}
+            isLoading={isSyncingInsights}
+            onRefresh={refreshInsights}
+            onOpenDashboard={() => setIsDashboardOpen(true)}
+          />
+        </section>
+
         <ModeSwitcher
           currentMode={currentMode}
           onModeChange={(mode) => {
@@ -119,56 +174,209 @@ export default function App() {
           onToggleTranscript={handleToggleTranscript}
         />
 
-        {/* Dynamic Modality Views */}
-        <div style={{ marginTop: '14px', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {currentMode === 'combo' && (
-            <ComboInterface
-              isMicOn={isMicOn}
-              onToggleMic={handleToggleMic}
-              isCamOn={isCamOn}
-              onToggleCam={handleToggleCam}
-              showTranscript={showTranscript}
-              onMoodLogged={handleMoodLogged}
-              onOpenMeditation={() => setIsMeditationOpen(true)}
-            />
-          )}
+        <section className="workspace-grid">
+          <div className="experience-shell">
+            {currentMode === 'combo' && (
+              <ComboInterface
+                isMicOn={isMicOn}
+                onToggleMic={handleToggleMic}
+                isCamOn={isCamOn}
+                onToggleCam={handleToggleCam}
+                showTranscript={showTranscript}
+                onMoodLogged={handleMoodLogged}
+                onOpenMeditation={() => setIsMeditationOpen(true)}
+                userId={DEMO_USER_ID}
+              />
+            )}
 
-          {currentMode === 'voice' && (
-            <VoiceAssistantOrb
-              isMicOn={isMicOn}
-              onToggleMic={handleToggleMic}
-              showTranscript={showTranscript}
-              onMoodLogged={handleMoodLogged}
-            />
-          )}
+            {currentMode === 'voice' && (
+              <VoiceAssistantOrb
+                isMicOn={isMicOn}
+                onToggleMic={handleToggleMic}
+                showTranscript={showTranscript}
+                onMoodLogged={handleMoodLogged}
+                userId={DEMO_USER_ID}
+              />
+            )}
 
-          {currentMode === 'text' && (
-            <ChatInterface onMoodLogged={handleMoodLogged} />
-          )}
+            {currentMode === 'text' && (
+              <ChatInterface onMoodLogged={handleMoodLogged} userId={DEMO_USER_ID} />
+            )}
 
-          {currentMode === 'video' && (
-            <VideoInterface
-              isCamOn={isCamOn}
-              onToggleCam={handleToggleCam}
-              onMoodLogged={handleMoodLogged}
-            />
-          )}
-        </div>
+            {currentMode === 'video' && (
+              <VideoInterface
+                isCamOn={isCamOn}
+                onToggleCam={handleToggleCam}
+                onMoodLogged={handleMoodLogged}
+                userId={DEMO_USER_ID}
+              />
+            )}
+          </div>
+
+          <aside className="guide-panel glass-panel">
+            <div className="guide-panel__header">
+              <span className="eyebrow">Next best actions</span>
+              <h3>Support smooth recovery loops</h3>
+            </div>
+
+            <div className="guide-card-list">
+              {recoveryActions.map((action) => (
+                <div key={action.title} className="guide-card">
+                  <strong>{action.title}</strong>
+                  <p>{action.body}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="guide-panel__history">
+              <div className="guide-panel__history-header">
+                <span>Recent check-ins</span>
+                <span>{moodHistory.length}</span>
+              </div>
+              {moodHistory.length ? (
+                moodHistory.slice(0, 4).map((entry) => (
+                  <div key={entry.id} className="history-row">
+                    <span className={`badge-emotion ${entry.emotion}`}>{formatLabel(entry.emotion)}</span>
+                    <small>{formatTimestamp(entry.timestamp)}</small>
+                  </div>
+                ))
+              ) : (
+                <p className="empty-copy">Your first check-in will show up here and shape the weekly trend.</p>
+              )}
+            </div>
+          </aside>
+        </section>
       </main>
 
-      {/* Burnout Insights Radar Modal */}
       <BurnoutRadar
         isOpen={isDashboardOpen}
         onClose={() => setIsDashboardOpen(false)}
         burnoutScore={burnoutScore}
         moodHistory={moodHistory}
+        burnoutSnapshot={burnoutSnapshot}
       />
 
-      {/* Sadhguru Miracle of Mind Meditation Modal */}
       <SadhguruMeditationModal
         isOpen={isMeditationOpen}
         onClose={() => setIsMeditationOpen(false)}
       />
     </div>
   );
+}
+
+function normalizeMoodLog(logEntry) {
+  return {
+    id: logEntry.id || logEntry._id || `entry_${Date.now()}`,
+    emotion: logEntry.emotion || 'neutral',
+    sourceMode: logEntry.sourceMode || logEntry.source_mode || 'text',
+    timestamp: logEntry.timestamp || new Date().toISOString(),
+    details: logEntry.details || {},
+  };
+}
+
+function buildSnapshot(logs) {
+  if (!logs.length) {
+    return EMPTY_SNAPSHOT;
+  }
+
+  const scoreMap = {
+    calm: 0.12,
+    happy: 0.2,
+    neutral: 0.42,
+    sad: 0.58,
+    anxious: 0.78,
+    stressed: 0.9,
+  };
+
+  const recent = logs.slice(0, 7);
+  const average = recent.reduce((total, item) => total + (scoreMap[item.emotion] ?? 0.42), 0) / recent.length;
+  const burnoutRisk = Math.round(average * 100);
+  const counts = recent.reduce((accumulator, item) => {
+    accumulator[item.emotion] = (accumulator[item.emotion] || 0) + 1;
+    return accumulator;
+  }, {});
+  const dominantEmotion =
+    Object.entries(counts).sort((left, right) => right[1] - left[1])[0]?.[0] || 'neutral';
+
+  return {
+    burnoutRisk,
+    level: burnoutRisk >= 70 ? 'High' : burnoutRisk >= 45 ? 'Moderate' : 'Low',
+    status:
+      burnoutRisk >= 70
+        ? 'Sustained strain detected'
+        : burnoutRisk >= 45
+          ? 'Recovery pacing recommended'
+          : 'Healthy equilibrium',
+    trend: recent[0]?.emotion === 'happy' || recent[0]?.emotion === 'calm' ? 'improving' : 'steady',
+    latestEmotion: recent[0]?.emotion || 'neutral',
+    dominantEmotion: dominantEmotion || 'neutral',
+  };
+}
+
+function getRecoveryActions(snapshot, latestEntry) {
+  const latestEmotion = latestEntry?.emotion || snapshot.latestEmotion;
+
+  if (snapshot.level === 'High') {
+    return [
+      {
+        title: 'Reduce intensity',
+        body: 'Shrink the next focus block to 25 minutes and remove one non-essential task from today.',
+      },
+      {
+        title: 'Recover physically',
+        body: 'Step away from the screen, hydrate, and let your breathing slow down before restarting.',
+      },
+      {
+        title: 'Log context',
+        body: 'Use the text mode to capture the trigger so repeated strain becomes easier to predict.',
+      },
+    ];
+  }
+
+  if (latestEmotion === 'happy' || latestEmotion === 'calm') {
+    return [
+      {
+        title: 'Protect the routine',
+        body: 'Save the pattern that helped today: timing, music, breaks, or environment.',
+      },
+      {
+        title: 'Build consistency',
+        body: 'Add one more check-in later today so the baseline stays grounded in real data.',
+      },
+      {
+        title: 'Stay lightweight',
+        body: 'Use the voice or combo mode for a quick pulse check rather than waiting for stress to build.',
+      },
+    ];
+  }
+
+  return [
+    {
+      title: 'Create a clear baseline',
+      body: 'Two or three short check-ins across the day will make burnout trends more trustworthy.',
+    },
+    {
+      title: 'Use multimodal mode',
+      body: 'The combo flow gives the strongest signal because it blends voice, text intent, and facial cues.',
+    },
+    {
+      title: 'End with a cooldown',
+      body: 'Open the meditation flow after your last session to lower carryover stress into the evening.',
+    },
+  ];
+}
+
+function formatLabel(value) {
+  return (value || 'neutral')
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatTimestamp(timestamp) {
+  return new Date(timestamp).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }

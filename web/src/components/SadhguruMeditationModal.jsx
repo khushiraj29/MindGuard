@@ -1,6 +1,6 @@
 // web/src/components/SadhguruMeditationModal.jsx
 import React, { useState, useEffect } from 'react';
-import { X, Sparkles, Play, Pause, RotateCcw, Heart, CheckCircle2, Wind, Shield } from 'lucide-react';
+import { X, Sparkles, Play, Pause, RotateCcw, Heart } from 'lucide-react';
 import { meditationEngine } from '../services/meditationEngine';
 
 export default function SadhguruMeditationModal({ isOpen, onClose }) {
@@ -8,7 +8,7 @@ export default function SadhguruMeditationModal({ isOpen, onClose }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [timer, setTimer] = useState(180); // 3 minutes = 180s
   const [breathPhase, setBreathPhase] = useState('inhale'); // 'inhale' | 'hold' | 'exhale' | 'pause'
-  const [streak, setStreak] = useState(3);
+  const [streak] = useState(3);
 
   const sessions = [
     {
